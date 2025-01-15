@@ -611,7 +611,7 @@ game.Players.LocalPlayer.CharacterRemoving:Connect(function()
     end
 end)
 
--- Auto Swing Variables
+-- Variables for swing system
 local autoSwingEnabled = false
 local autoSwingConnection
 local lastSwingTime = 0
@@ -622,20 +622,47 @@ local AutoSwingStatus = Tabs.Main:AddParagraph({
     Content = "OFF (Press V to toggle)"
 })
 
--- Cache the remote event
+-- Cache services and events
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local SwingEvent = game:GetService("ReplicatedStorage").Events.SwingTool
 
--- Setup input detection
-local UserInputService = game:GetService("UserInputService")
+-- Function to get nearby resources
+local function getNearbyResource()
+    local char = game.Players.LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    
+    local hrp = char.HumanoidRootPart
+    local nearestDist = math.huge
+    local nearestResource = nil
+    
+    -- Check resources folder
+    for _, folder in pairs(workspace.Map.Resources:GetChildren()) do
+        for _, resource in pairs(folder:GetChildren()) do
+            if resource:FindFirstChild("Reference") then
+                local dist = (hrp.Position - resource.Reference.Position).Magnitude
+                if dist < nearestDist and dist < 20 then
+                    nearestDist = dist
+                    nearestResource = resource
+                end
+            end
+        end
+    end
+    
+    return nearestResource
+end
+
+-- Randomize delays to appear more natural
+local function getRandomDelay()
+    return 0.3 + (math.random() * 0.4) -- Random delay between 0.3 and 0.7 seconds
+end
+
+-- Setup input detection with improved swing logic
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.V and not gameProcessed then
         autoSwingEnabled = not autoSwingEnabled
         
         if autoSwingEnabled then
-            -- Cache character reference
-            local char = game.Players.LocalPlayer.Character
-            if not char then return end
-            
             AutoSwingStatus:SetDesc("ON (Press V to toggle)")
             StatusLabel.Text = "Auto Swing: ON"
             
@@ -643,26 +670,38 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 autoSwingConnection:Disconnect()
             end
             
-            autoSwingConnection = game:GetService("RunService").Heartbeat:Connect(function()
-                -- Check swing delay
+            autoSwingConnection = RunService.Heartbeat:Connect(function()
+                local char = game.Players.LocalPlayer.Character
+                if not char then return end
+                
+                -- Check delay with randomization
                 local currentTime = tick()
-                if currentTime - lastSwingTime < 0.2 then -- Fixed delay to prevent kicks
+                if currentTime - lastSwingTime < getRandomDelay() then 
                     return 
                 end
-                lastSwingTime = currentTime
                 
-                -- Create smaller swing arguments array
+                -- Get nearest resource to make swinging look more natural
+                local nearestResource = getNearbyResource()
+                if not nearestResource then return end
+                
+                -- Create dynamic swing arguments
                 local swingArgs = {
                     [1] = {
-                        [1] = char
-                    }
+                        [1] = nearestResource,  -- Target the nearest resource
+                        [2] = char.HumanoidRootPart -- Include root part for verification
+                    },
+                    [2] = tick()  -- Include current time
                 }
                 
-                -- Fire the swing event with minimal arguments
-                SwingEvent:FireServer(swingArgs)
+                -- Add slight random variation to timing
+                task.wait(math.random() * 0.1)
                 
-                -- Add small delay to prevent overload
-                task.wait(0.05)
+                -- Fire swing event
+                pcall(function()
+                    SwingEvent:FireServer(swingArgs)
+                end)
+                
+                lastSwingTime = tick()
             end)
         else
             if autoSwingConnection then
@@ -673,6 +712,16 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
             StatusLabel.Text = "Auto Swing: OFF"
         end
     end
+end)
+
+-- Clean up connection when character is removed
+game.Players.LocalPlayer.CharacterRemoving:Connect(function()
+    if autoSwingConnection then
+        autoSwingConnection:Disconnect()
+        autoSwingConnection = nil
+    end
+    autoSwingEnabled = false
+    StatusLabel.Text = "Auto Swing: OFF"
 end)
 
 -- Clean up connection when character is removed
