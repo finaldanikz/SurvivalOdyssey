@@ -1,0 +1,1229 @@
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+-- Remove anti-cheat
+local player = game:GetService("Players").LocalPlayer
+if player and player.PlayerScripts:FindFirstChild("Loader") then
+    pcall(function()
+        player.PlayerScripts.Loader.MainScript.AntiCheat.SpeedScript:Destroy()
+        player.PlayerScripts.Loader.MainScript.AntiCheat.FlyScript:Destroy()
+    end)
+end
+
+local Window = Fluent:CreateWindow({
+    Title = "Survival Odyssey",
+    SubTitle = "by smh",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Darker",
+})
+
+local Tabs = {
+    Main = Window:AddTab({ Title = "Main", Icon = "rbxassetid://10723424505" }),
+    Player = Window:AddTab({ Title = "Player", Icon = "rbxassetid://10709769841" }),
+    Visuals = Window:AddTab({ Title = "Visuals", Icon = "rbxassetid://10723346959" }),
+    Misc = Window:AddTab({ Title = "Misc", Icon = "settings" }),
+    Autofarm = Window:AddTab({ Title = "Autofarm", Icon = "rbxassetid://10723424505" }),
+    Combat = Window:AddTab({ Title = "Combat", Icon = "rbxassetid://10723424505" }),
+}
+
+local Options = Fluent.Options
+
+-- Function to get player list
+local function GetPlayerList()
+    local playerList = {}
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player ~= game.Players.LocalPlayer then
+            table.insert(playerList, player.Name)
+        end
+    end
+    return playerList
+end
+
+-- Player Teleport Section
+local PlayerSection = Tabs.Player:AddSection("Player Teleport")
+
+-- Player Select Dropdown
+local PlayerDropdown = PlayerSection:AddDropdown("PlayerSelect", {
+    Title = "Select Player",
+    Description = "Choose a player to teleport to",
+    Values = GetPlayerList(),
+    Multi = false,
+    Default = 1,
+})
+
+-- Refresh Button
+PlayerSection:AddButton({
+    Title = "Refresh List",
+    Description = "Update player list",
+    Callback = function()
+        PlayerDropdown:SetValues(GetPlayerList())
+        Fluent:Notify({
+            Title = "Player List",
+            Content = "Player list refreshed!",
+            Duration = 2
+        })
+    end
+})
+
+-- Teleport Button
+PlayerSection:AddButton({
+    Title = "Teleport",
+    Description = "Teleport to selected player",
+    Callback = function()
+        local selectedPlayer = Options.PlayerSelect.Value
+        local targetPlayer = game.Players:FindFirstChild(selectedPlayer)
+        
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local char = game.Players.LocalPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                char.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame
+            end
+        end
+    end
+})
+
+-- Auto-refresh player list when players join or leave
+game.Players.PlayerAdded:Connect(function()
+    PlayerDropdown:SetValues(GetPlayerList())
+end)
+
+game.Players.PlayerRemoving:Connect(function()
+    PlayerDropdown:SetValues(GetPlayerList())
+end)
+
+-- Player Movement Section
+local MovementSection = Tabs.Player:AddSection("Movement")
+
+-- Variables to store values
+local selectedWalkSpeed = 16
+local selectedJumpPower = 50
+
+-- Movement update function
+local function updateMovement()
+    local character = game.Players.LocalPlayer.Character
+    if character then
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            if humanoid.WalkSpeed ~= selectedWalkSpeed then
+                humanoid.WalkSpeed = selectedWalkSpeed
+            end
+            if humanoid.JumpPower ~= selectedJumpPower then
+                humanoid.JumpPower = selectedJumpPower
+            end
+        end
+    end
+end
+
+-- WalkSpeed Slider
+MovementSection:AddSlider("WalkSpeed", {
+    Title = "WalkSpeed",
+    Description = "Adjust your movement speed",
+    Default = 16,
+    Min = 16,
+    Max = 500,
+    Rounding = 0,
+    Callback = function(Value)
+        selectedWalkSpeed = Value
+        updateMovement()
+    end
+})
+
+-- JumpPower Slider
+MovementSection:AddSlider("JumpPower", {
+    Title = "JumpPower",
+    Description = "Adjust your jump height",
+    Default = 50,
+    Min = 50,
+    Max = 500,
+    Rounding = 0,
+    Callback = function(Value)
+        selectedJumpPower = Value
+        updateMovement()
+    end
+})
+
+-- Infinite Jump Toggle
+MovementSection:AddToggle("InfiniteJump", {
+    Title = "Infinite Jump",
+    Description = "Jump without touching the ground",
+    Default = false
+})
+
+-- Setup infinite jump
+game:GetService("UserInputService").JumpRequest:Connect(function()
+    if Options.InfiniteJump.Value then
+        local character = game.Players.LocalPlayer.Character
+        if character and character:FindFirstChild("Humanoid") then
+            character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end
+end)
+
+-- Constant update loop for movement values
+local RunService = game:GetService("RunService")
+
+-- Update on RenderStepped for smoother updates
+RunService.RenderStepped:Connect(updateMovement)
+
+-- Also update on Heartbeat as backup
+RunService.Heartbeat:Connect(updateMovement)
+
+-- Update speed and jump power when character spawns
+game.Players.LocalPlayer.CharacterAdded:Connect(function(char)
+    -- Initial update
+    updateMovement()
+    
+    -- Also update when humanoid is added
+    char:WaitForChild("Humanoid").Changed:Connect(function()
+        updateMovement()
+    end)
+end)
+
+-- Create floating status GUI
+local StatusGui = Instance.new("ScreenGui")
+StatusGui.Name = "AutoSwingStatus"
+StatusGui.ResetOnSpawn = false
+StatusGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+StatusGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(0, 120, 0, 25)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.TextColor3 = Color3.fromRGB(147, 112, 219) -- Purple
+StatusLabel.TextStrokeTransparency = 0.5
+StatusLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+StatusLabel.Font = Enum.Font.GothamBold
+StatusLabel.TextSize = 14
+StatusLabel.Text = "Auto Swing: OFF"
+StatusLabel.Parent = StatusGui
+
+-- Visuals Tab
+local VisualsSection = Tabs.Visuals:AddSection("Interface")
+
+-- Cursor Text Toggle
+VisualsSection:AddToggle("ShowCursorText", {
+    Title = "Show Auto Swing Status",
+    Description = "Show/Hide the cursor status text",
+    Default = true,
+    Callback = function(Value)
+        StatusLabel.Visible = Value
+    end
+})
+
+-- ESP Section
+local ESPSection = Tabs.Visuals:AddSection("ESP")
+
+-- ESP Variables
+local espEnabled = false
+local espObjects = {}
+local espColor = Color3.fromRGB(148, 0, 255) -- #9400ff in RGB
+
+-- ESP Functions
+local function createESPGui(player)
+    if player == game.Players.LocalPlayer then return end
+    
+    local espGui = Instance.new("BillboardGui")
+    espGui.Name = player.Name .. "_ESP"
+    espGui.AlwaysOnTop = true
+    espGui.Size = UDim2.new(4, 0, 5, 0)
+    espGui.StudsOffsetWorldSpace = Vector3.new(0, 0, 0)
+    
+    -- Name Label
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Name = "NameLabel"
+    nameLabel.Size = UDim2.new(1, 0, 0.2, 0)
+    nameLabel.Position = UDim2.new(0, 0, 0, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextColor3 = Color3.new(1, 1, 1)
+    nameLabel.TextStrokeTransparency = 0
+    nameLabel.TextSize = 14
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.Parent = espGui
+    
+    -- Health Bar Background
+    local healthBg = Instance.new("Frame")
+    healthBg.Name = "HealthBg"
+    healthBg.Size = UDim2.new(0.05, 0, 0.8, 0)
+    healthBg.Position = UDim2.new(0.975, 0, 0.2, 0)
+    healthBg.BackgroundColor3 = Color3.new(0, 0, 0)
+    healthBg.BorderSizePixel = 0
+    healthBg.Parent = espGui
+    
+    -- Health Bar Fill
+    local healthBar = Instance.new("Frame")
+    healthBar.Name = "HealthBar"
+    healthBar.Size = UDim2.new(1, 0, 1, 0)
+    healthBar.BackgroundColor3 = Color3.new(0, 1, 0)
+    healthBar.BorderSizePixel = 0
+    healthBar.Parent = healthBg
+    
+    -- Distance Label
+    local distanceLabel = Instance.new("TextLabel")
+    distanceLabel.Name = "DistanceLabel"
+    distanceLabel.Size = UDim2.new(1, 0, 0.2, 0)
+    distanceLabel.Position = UDim2.new(0, 0, 0.8, 0)
+    distanceLabel.BackgroundTransparency = 1
+    distanceLabel.TextColor3 = Color3.new(1, 1, 1)
+    distanceLabel.TextStrokeTransparency = 0
+    distanceLabel.TextSize = 14
+    distanceLabel.Font = Enum.Font.GothamBold
+    distanceLabel.Parent = espGui
+    
+    return espGui
+end
+
+local function updateESP()
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player ~= game.Players.LocalPlayer then
+            local character = player.Character
+            if character and character:FindFirstChild("HumanoidRootPart") and character:FindFirstChild("Humanoid") then
+                -- Handle Highlight
+                local highlight = character:FindFirstChild("Highlight") or Instance.new("Highlight")
+                highlight.Name = "Highlight"
+                highlight.FillColor = espColor
+                highlight.OutlineColor = Color3.new(1, 1, 1)
+                highlight.FillTransparency = 0.5
+                highlight.OutlineTransparency = 0
+                highlight.Adornee = character
+                highlight.Parent = character
+                highlight.Enabled = espEnabled
+                
+                -- Handle ESP GUI
+                local espGui = espObjects[player.Name] or createESPGui(player)
+                espGui.Parent = character:FindFirstChild("HumanoidRootPart")
+                espGui.Enabled = espEnabled
+                espObjects[player.Name] = espGui
+                
+                if espEnabled then
+                    -- Update Name
+                    espGui.NameLabel.Text = player.Name
+                    
+                    -- Update Health
+                    local humanoid = character:FindFirstChild("Humanoid")
+                    local healthPercent = humanoid and humanoid.Health / humanoid.MaxHealth or 0
+                    local healthBar = espGui.HealthBg.HealthBar
+                    healthBar.Size = UDim2.new(1, 0, healthPercent, 0)
+                    healthBar.Position = UDim2.new(0, 0, 1 - healthPercent, 0)
+                    healthBar.BackgroundColor3 = Color3.new(1 - healthPercent, healthPercent, 0)
+                    
+                    -- Update Distance
+                    local distance = (character.HumanoidRootPart.Position - game.Players.LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                    espGui.DistanceLabel.Text = string.format("[%d]", math.floor(distance))
+                end
+            end
+        end
+    end
+end
+
+-- Update ESP on RenderStepped for smooth updates
+game:GetService("RunService").RenderStepped:Connect(function()
+    if espEnabled then
+        updateESP()
+    end
+end)
+
+-- ESP Color Picker
+local espColorPicker = ESPSection:AddColorpicker("ESPColor", {
+    Title = "ESP Color",
+    Description = "Choose the ESP highlight color",
+    Default = espColor,
+    Callback = function(Value)
+        espColor = Value
+    end
+})
+
+-- ESP Toggle
+ESPSection:AddToggle("ESP", {
+    Title = "Enable ESP",
+    Description = "Show player ESP with health and distance",
+    Default = false,
+    Callback = function(Value)
+        espEnabled = Value
+        if not Value then
+            -- Clean up ESP
+            for _, obj in pairs(espObjects) do
+                obj:Destroy()
+            end
+            espObjects = {}
+            
+            -- Remove highlights
+            for _, player in pairs(game.Players:GetPlayers()) do
+                if player.Character then
+                    local highlight = player.Character:FindFirstChild("Highlight")
+                    if highlight then highlight:Destroy() end
+                end
+            end
+        end
+    end
+})
+
+-- Clean up on player removal
+game.Players.PlayerRemoving:Connect(function(player)
+    if espObjects[player.Name] then
+        espObjects[player.Name]:Destroy()
+        espObjects[player.Name] = nil
+    end
+end)
+
+-- Update status label position
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        StatusLabel.Position = UDim2.new(0, input.Position.X + 20, 0, input.Position.Y + 20)
+    end
+end)
+
+-- Auto Eat Section
+local AutoEatSection = Tabs.Main:AddSection("Auto Eat")
+
+-- Variables for auto eat
+local autoEatEnabled = false
+local minHungerThreshold = 50
+local checkInterval = 3
+local autoEatConnection = nil
+local selectedFood = "Raw Meat"
+
+-- Available food types
+local foodTypes = {
+    -- Cooked Meats
+    "Cooked Fish",
+    "Cooked Turkey Leg",
+    "Cooked Meat",
+    "Cooked Underworld Meat",
+    "Cooked Morsel",
+    
+    -- Raw Meats
+    "Raw Meat",
+    "Raw Morsel",
+    "Raw Fish",
+    "Raw Turkey Leg",
+    "Raw Underworld Meat",
+    
+    -- Fruits
+    "Berry",
+    "Strawberry",
+    "Lemon",
+    "Corn",
+    "Banana",
+    "Pumpkin",
+    "Cloudberry",
+    "Apple",
+    "Jelly",
+    "Strangefruit",
+    "Oddberry",
+    "Sunfruit",
+    "Orange",
+    "Bloodfruit",
+    "Blight Fruit",
+    "Heartfruit",
+    "Bluefruit",
+    "Coconut",
+    "Cactus Bit"
+}
+
+-- Sort food types alphabetically for easier selection
+table.sort(foodTypes)
+
+-- Food Selection Dropdown
+AutoEatSection:AddDropdown("FoodType", {
+    Title = "Food Type",
+    Description = "Select food to eat",
+    Values = foodTypes,
+    Default = 1,
+    Multi = false,
+    Callback = function(Value)
+        selectedFood = Value
+    end
+})
+
+-- Function to get current hunger
+local function getCurrentHunger()
+    local player = game.Players.LocalPlayer
+    local hungerLabel = player.PlayerGui.MainGui.Panels.Stats.List.Food.NumberLabel
+    return tonumber(hungerLabel.Text) or 100
+end
+
+-- Function to find food slot
+local function findFoodSlot(foodName)
+    local player = game.Players.LocalPlayer
+    local inventory = player.PlayerGui.MainGui.RightPanel.Inventory.List
+    
+    -- Check slots 1-100
+    for i = 1, 100 do
+        local slot = inventory:FindFirstChild(tostring(i))
+        if slot and slot:FindFirstChild("title") and slot.title.Text == "Raw Meat" then -- Hardcoded to Raw Meat for now
+            return i
+        end
+    end
+    return nil
+end
+
+-- Function to eat food
+local function eatFood(slot)
+    local Event = game:GetService("ReplicatedStorage").Events.UseBagItem
+    Event:FireServer(slot)
+end
+
+-- Auto Eat Function
+local function startAutoEat()
+    if autoEatConnection then
+        autoEatConnection:Disconnect()
+        autoEatConnection = nil
+    end
+
+    local lastCheckTime = 0
+    
+    autoEatConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not autoEatEnabled then return end
+        
+        local currentTime = tick()
+        if currentTime - lastCheckTime < checkInterval then return end
+        lastCheckTime = currentTime
+        
+        local currentHunger = getCurrentHunger()
+        if currentHunger <= minHungerThreshold then
+            local foodSlot = findFoodSlot("Raw Meat")
+            if foodSlot then
+                eatFood(foodSlot)
+            end
+        end
+    end)
+end
+
+-- Auto Eat Toggle
+AutoEatSection:AddToggle("AutoEat", {
+    Title = "Auto Eat",
+    Description = "Automatically eat when hungry",
+    Default = false,
+    Callback = function(Value)
+        autoEatEnabled = Value
+        if Value then
+            startAutoEat()
+        else
+            if autoEatConnection then
+                autoEatConnection:Disconnect()
+                autoEatConnection = nil
+            end
+        end
+    end
+})
+
+-- Hunger Threshold Slider
+AutoEatSection:AddSlider("HungerThreshold", {
+    Title = "Minimum Hunger",
+    Description = "Eat when hunger falls below this value",
+    Default = 50,
+    Min = 0,
+    Max = 100,
+    Rounding = 0,
+    Callback = function(Value)
+        minHungerThreshold = Value
+    end
+})
+
+-- Check Interval Slider
+AutoEatSection:AddSlider("CheckInterval", {
+    Title = "Check Interval",
+    Description = "Seconds between hunger checks",
+    Default = 3,
+    Min = 1,
+    Max = 10,
+    Rounding = 1,
+    Callback = function(Value)
+        checkInterval = Value
+    end
+})
+
+-- Clean up on script end
+game.Players.LocalPlayer.CharacterRemoving:Connect(function()
+    if autoEatConnection then
+        autoEatConnection:Disconnect()
+        autoEatConnection = nil
+    end
+end)
+
+-- Auto Pickup Section
+local AutoPickupSection = Tabs.Main:AddSection("Auto Pickup")
+
+-- Variables for auto pickup
+local autoPickupEnabled = false
+local pickupConnection = nil
+
+-- Function to pickup items
+local function startAutoPickup()
+    if pickupConnection then
+        pickupConnection:Disconnect()
+        pickupConnection = nil
+    end
+
+    local lastPickupTime = 0
+    local pickupDelay = 1 -- 1 second delay between pickups
+    local Event = game:GetService("ReplicatedStorage").Events.Pickup
+
+    pickupConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not autoPickupEnabled then return end
+        
+        -- Check delay
+        local currentTime = tick()
+        if currentTime - lastPickupTime < pickupDelay then return end
+        lastPickupTime = currentTime
+        
+        -- Get all items
+        local itemsFolder = game:GetService("Workspace").Important.Items
+        if not itemsFolder then return end
+        
+        -- Process items with delay
+        for _, item in ipairs(itemsFolder:GetChildren()) do
+            if not autoPickupEnabled then break end
+            if item:FindFirstChild("Pickup") then
+                Event:InvokeServer(item)
+                task.wait(0.1) -- Small delay between each item
+            end
+        end
+    end)
+end
+
+-- Auto Pickup Toggle
+AutoPickupSection:AddToggle("AutoPickup", {
+    Title = "Auto Pickup",
+    Description = "Automatically pickup all items",
+    Default = false,
+    Callback = function(Value)
+        autoPickupEnabled = Value
+        if Value then
+            startAutoPickup()
+        else
+            if pickupConnection then
+                pickupConnection:Disconnect()
+                pickupConnection = nil
+            end
+        end
+    end
+})
+
+-- Clean up on script end
+game.Players.LocalPlayer.CharacterRemoving:Connect(function()
+    if pickupConnection then
+        pickupConnection:Disconnect()
+        pickupConnection = nil
+    end
+end)
+
+-- Auto Swing Variables
+local autoSwingEnabled = false
+local autoSwingConnection
+local lastSwingTime = 0
+
+-- Add status indicator
+local AutoSwingStatus = Tabs.Main:AddParagraph({
+    Title = "Auto Swing Status",
+    Content = "OFF (Press V to toggle)"
+})
+
+-- Cache the remote event
+local SwingEvent = game:GetService("ReplicatedStorage").Events.SwingTool
+
+-- Setup input detection
+local UserInputService = game:GetService("UserInputService")
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.KeyCode == Enum.KeyCode.V and not gameProcessed then
+        autoSwingEnabled = not autoSwingEnabled
+        
+        if autoSwingEnabled then
+            -- Cache character reference
+            local char = game.Players.LocalPlayer.Character
+            if not char then return end
+            
+            AutoSwingStatus:SetDesc("ON (Press V to toggle)")
+            StatusLabel.Text = "Auto Swing: ON"
+            
+            if autoSwingConnection then
+                autoSwingConnection:Disconnect()
+            end
+            
+            autoSwingConnection = game:GetService("RunService").Heartbeat:Connect(function()
+                -- Check swing delay
+                local currentTime = tick()
+                if currentTime - lastSwingTime < 0.2 then -- Fixed delay to prevent kicks
+                    return 
+                end
+                lastSwingTime = currentTime
+                
+                -- Create smaller swing arguments array
+                local swingArgs = {
+                    [1] = {
+                        [1] = char
+                    }
+                }
+                
+                -- Fire the swing event with minimal arguments
+                SwingEvent:FireServer(swingArgs)
+                
+                -- Add small delay to prevent overload
+                task.wait(0.05)
+            end)
+        else
+            if autoSwingConnection then
+                autoSwingConnection:Disconnect()
+                autoSwingConnection = nil
+            end
+            AutoSwingStatus:SetDesc("OFF (Press V to toggle)")
+            StatusLabel.Text = "Auto Swing: OFF"
+        end
+    end
+end)
+
+-- Clean up connection when character is removed
+game.Players.LocalPlayer.CharacterRemoving:Connect(function()
+    if autoSwingConnection then
+        autoSwingConnection:Disconnect()
+        autoSwingConnection = nil
+    end
+    autoSwingEnabled = false
+    StatusLabel.Text = "Auto Swing: OFF"
+end)
+
+-- Water Walking Toggle
+local waterPart = nil
+local waterWalkConnection = nil
+
+Tabs.Main:AddToggle("WaterWalk", {
+    Title = "Water Walking",
+    Description = "Walk on water",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            -- Create water walking part
+            waterPart = Instance.new("Part")
+            waterPart.Size = Vector3.new(100, 1, 100) -- Platform size
+            waterPart.Anchored = true
+            waterPart.CanCollide = true
+            waterPart.Transparency = 1
+            waterPart.Name = "WaterWalkPart"
+            waterPart.Parent = game.Workspace
+            
+            -- Make platform follow player
+            waterWalkConnection = RunService.RenderStepped:Connect(function()
+                local char = game.Players.LocalPlayer.Character
+                if char and char.PrimaryPart then
+                    waterPart.Position = Vector3.new(
+                        char.PrimaryPart.Position.X,
+                        -2.72509742, -- Water level
+                        char.PrimaryPart.Position.Z
+                    )
+                end
+            end)
+        else
+            -- Clean up
+            if waterWalkConnection then
+                waterWalkConnection:Disconnect()
+                waterWalkConnection = nil
+            end
+            if waterPart then
+                waterPart:Destroy()
+                waterPart = nil
+            end
+        end
+    end
+})
+
+-- Auto Respawn Section
+local AutoRespawnSection = Tabs.Main:AddSection("Auto Respawn")
+
+-- Variables for auto respawn
+local autoRespawnEnabled = false
+local respawnConnection = nil
+local isRespawning = false
+
+-- Function to send respawn remotes
+local function sendRespawnRemotes()
+    local SpawnFirst = game:GetService("ReplicatedStorage").Events.SpawnFirst
+    local ForceSpawn = game:GetService("ReplicatedStorage").Events.ForceSpawn
+    
+    SpawnFirst:FireServer()
+    task.wait(0.1)
+    ForceSpawn:FireServer()
+end
+
+-- Function to handle respawn
+local function startAutoRespawn()
+    if respawnConnection then
+        respawnConnection:Disconnect()
+        respawnConnection = nil
+    end
+
+    respawnConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not autoRespawnEnabled then return end
+        
+        local character = game.Players.LocalPlayer.Character
+        if not character then 
+            if not isRespawning then
+                isRespawning = true
+                task.wait(3.5)
+                sendRespawnRemotes()
+                task.wait(1)
+                isRespawning = false
+            end
+            return
+        end
+        
+        local humanoid = character:FindFirstChild("Humanoid")
+        if not humanoid then return end
+        
+        if humanoid.Health <= 0 and not isRespawning then
+            isRespawning = true
+            task.wait(3.5)
+            sendRespawnRemotes()
+            task.wait(1)
+            isRespawning = false
+        end
+        
+        task.wait(0.1)
+    end)
+end
+
+-- Auto Respawn Toggle
+AutoRespawnSection:AddToggle("AutoRespawn", {
+    Title = "Auto Respawn",
+    Description = "Automatically respawn when dead",
+    Default = false,
+    Callback = function(Value)
+        autoRespawnEnabled = Value
+        isRespawning = false
+        if Value then
+            startAutoRespawn()
+        else
+            if respawnConnection then
+                respawnConnection:Disconnect()
+                respawnConnection = nil
+            end
+        end
+    end
+})
+
+-- Clean up
+game.Players.LocalPlayer.CharacterRemoving:Connect(function()
+    isRespawning = false
+end)
+
+-- Autofarm Tab
+local AutofarmSection = Tabs.Autofarm:AddSection("Resource Farming")
+
+-- Variables for autofarm
+local resourceFarmEnabled = false
+local selectedResource = "Jungle Tree"
+local farmingCoroutine = nil
+
+-- Resource Selection Dropdown
+AutofarmSection:AddDropdown("ResourceType", {
+    Title = "Resource Type",
+    Description = "Select resource to farm",
+    Values = {"Jungle Tree", "Bush"},
+    Default = "Jungle Tree",
+    Multi = false,
+    Callback = function(Value)
+        selectedResource = Value
+    end
+})
+
+-- Function to start resource farming
+local function startResourceFarm()
+    if farmingCoroutine then
+        coroutine.close(farmingCoroutine)
+        farmingCoroutine = nil
+    end
+
+    farmingCoroutine = coroutine.create(function()
+        while resourceFarmEnabled do
+            local success, err = pcall(function()
+                local resourceFolder = workspace.Map.Resources
+                
+                if selectedResource == "Jungle Tree" then
+                    -- Jungle Tree farming
+                    for _, resource in pairs(resourceFolder:GetChildren()) do
+                        if resource.Name == "Jungle Tree" then
+                            for _, resourceGroup in pairs(resource:GetChildren()) do
+                                if not resourceFarmEnabled then return end
+                                
+                                if resourceGroup:FindFirstChild("Reference") and resourceGroup:FindFirstChild("Health") and resourceGroup.Health.Value > 0 then
+                                    -- Teleport to resource
+                                    game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = resourceGroup.Reference.CFrame * CFrame.new(0, 3, 0)
+                                    
+                                    -- Wait for resource to be destroyed
+                                    local startTime = tick()
+                                    local lastHealth = resourceGroup.Health.Value
+                                    local lastHealthCheck = tick()
+                                    
+                                    while resourceFarmEnabled and resourceGroup:FindFirstChild("Health") and resourceGroup.Health.Value > 0 do
+                                        -- Check if health hasn't changed in 10 seconds
+                                        if tick() - lastHealthCheck > 10 and resourceGroup.Health.Value == lastHealth then
+                                            print("Resource health hasn't changed, moving to next")
+                                            break
+                                        end
+                                        
+                                        -- Update health check
+                                        if resourceGroup.Health.Value ~= lastHealth then
+                                            lastHealth = resourceGroup.Health.Value
+                                            lastHealthCheck = tick()
+                                        end
+                                        
+                                        -- Overall timeout after 30 seconds
+                                        if tick() - startTime > 30 then
+                                            print("Resource timeout, moving to next")
+                                            break
+                                        end
+                                        
+                                        task.wait(Options.SwingSpeed.Value)
+                                    end
+                                    
+                                    task.wait(4) -- Wait before moving to next resource
+                                end
+                            end
+                        end
+                    end
+                else
+                    -- Bush farming
+                    local bushes = resourceFolder:FindFirstChild("Bush")
+                    if bushes then
+                        for _, bush in pairs(bushes:GetChildren()) do
+                            if not resourceFarmEnabled then return end
+                            
+                            if bush:FindFirstChild("Stump") and bush:FindFirstChild("Health") and bush.Health.Value > 0 then
+                                -- Teleport to bush
+                                game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = bush.Stump.CFrame * CFrame.new(0, 3, 0)
+                                
+                                -- Wait for bush to be destroyed
+                                local startTime = tick()
+                                local lastHealth = bush.Health.Value
+                                local lastHealthCheck = tick()
+                                
+                                while resourceFarmEnabled and bush:FindFirstChild("Health") and bush.Health.Value > 0 do
+                                    -- Check if health hasn't changed in 10 seconds
+                                    if tick() - lastHealthCheck > 10 and bush.Health.Value == lastHealth then
+                                        print("Bush health hasn't changed, moving to next")
+                                        break
+                                    end
+                                    
+                                    -- Update health check
+                                    if bush.Health.Value ~= lastHealth then
+                                        lastHealth = bush.Health.Value
+                                        lastHealthCheck = tick()
+                                    end
+                                    
+                                    -- Overall timeout after 30 seconds
+                                    if tick() - startTime > 30 then
+                                        print("Bush timeout, moving to next")
+                                        break
+                                    end
+                                    
+                                    task.wait(Options.SwingSpeed.Value)
+                                end
+                                
+                                task.wait(4) -- Wait before moving to next bush
+                            end
+                        end
+                    end
+                end
+            end)
+            
+            if not success then
+                print("Farming error:", err)
+            end
+            
+            task.wait(1)
+        end
+    end)
+    
+    coroutine.resume(farmingCoroutine)
+end
+
+-- Resource Farming Toggle
+AutofarmSection:AddToggle("ResourceFarm", {
+    Title = "Enable Farm",
+    Description = "Automatically farm selected resource",
+    Default = false,
+    Callback = function(Value)
+        resourceFarmEnabled = Value
+        if Value then
+            startResourceFarm()
+        else
+            if farmingCoroutine then
+                coroutine.close(farmingCoroutine)
+                farmingCoroutine = nil
+            end
+        end
+    end
+})
+
+-- Swing Speed Slider
+AutofarmSection:AddSlider("SwingSpeed", {
+    Title = "Swing Speed",
+    Description = "Speed of auto swing",
+    Default = 0.5,
+    Min = 0.1,
+    Max = 2,
+    Rounding = 1,
+    Callback = function(Value)
+        -- Will be used in the farm function
+    end
+})
+
+-- Clean up on script end
+game:GetService("Players").LocalPlayer.CharacterRemoving:Connect(function()
+    resourceFarmEnabled = false
+    if farmingCoroutine then
+        coroutine.close(farmingCoroutine)
+        farmingCoroutine = nil
+    end
+end)
+
+-- Code Redeemer Section
+local CodeSection = Tabs.Main:AddSection("Code Redeemer")
+
+-- Function to get codes from URL
+local function getCodes(url)
+    local success, response = pcall(function()
+        return game:HttpGet(url)
+    end)
+    
+    if success then
+        local codes = {}
+        -- Split response by newlines and filter empty lines
+        for line in response:gmatch("[^\r\n]+") do
+            if line ~= "" then
+                table.insert(codes, line)
+            end
+        end
+        return codes
+    end
+    return {}
+end
+
+-- Function to redeem codes
+local function redeemCodes()
+    local codesUrl = "https://raw.githubusercontent.com/Chromeyc/roblox/refs/heads/main/codes.txt"
+    
+    local codes = getCodes(codesUrl)
+    local Event = game:GetService("ReplicatedStorage").Events.RedeemCode
+    
+    -- Status counter
+    local redeemed = 0
+    local total = #codes
+    
+    -- Update status
+    local function updateStatus()
+        return string.format("Redeeming codes: %d/%d", redeemed, total)
+    end
+    
+    -- Create status paragraph
+    local StatusParagraph = CodeSection:AddParagraph({
+        Title = "Status:",
+        Content = "Ready to redeem codes"
+    })
+    
+    -- Redeem each code
+    for _, code in ipairs(codes) do
+        StatusParagraph:SetDesc(updateStatus())
+        Event:FireServer(code)
+        redeemed = redeemed + 1
+        task.wait(0.5) -- Wait between codes to prevent throttling
+    end
+    
+    -- Update final status
+    StatusParagraph:SetDesc(string.format("Completed! Redeemed %d codes", redeemed))
+    task.wait(3)
+    StatusParagraph:SetDesc("Ready to redeem codes")
+end
+
+-- Redeem Codes Button
+CodeSection:AddButton({
+    Title = "Redeem All Codes",
+    Description = "Automatically redeem all available codes",
+    Callback = function()
+        task.spawn(redeemCodes)
+    end
+})
+
+-- Add Combat Tab
+local CombatSection = Tabs.Combat:AddSection("Combat")
+
+-- Function to find the closest player specifically for Bow Aimbot
+local function getClosestPlayerForBow()
+    local localPlayer = game.Players.LocalPlayer
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+    
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local distance = (localPlayer.Character.HumanoidRootPart.Position - player.Character.Head.Position).Magnitude
+            if distance < shortestDistance then
+                shortestDistance = distance
+                closestPlayer = player
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+-- Bow Aimbot Function
+local function startBowAimbot()
+    spawn(function()
+        while bowAimbotEnabled do
+            local closestPlayer = getClosestPlayerForBow()
+            if closestPlayer and closestPlayer.Character and closestPlayer.Character:FindFirstChild("Head") then
+                local targetPosition = closestPlayer.Character.Head.Position
+                local args = {
+                    [1] = {
+                        ["drawStrength"] = 100,
+                        ["Position"] = targetPosition,
+                        ["toolName"] = "Bow",
+                        ["mousePosition"] = targetPosition,
+                        ["rootPartPosition"] = game.Players.LocalPlayer.Character.HumanoidRootPart.Position
+                    }
+                }
+                
+                game:GetService("ReplicatedStorage").Events.CreateProjectile:FireServer(unpack(args))
+            end
+            wait(0.01)
+        end
+    end)
+end
+
+-- Bow Aimbot Toggle
+CombatSection:AddToggle("BowAimbot", {
+    Title = "Bow Aimbot",
+    Description = "Automatically aim bow at nearest player",
+    Default = false,
+    Callback = function(Value)
+        bowAimbotEnabled = Value
+        if Value then
+            startBowAimbot()
+        end
+    end
+})
+
+-- Kill Aura
+CombatSection:AddToggle("KillAura", {
+    Title = "Kill Aura",
+    Description = "Automatically attack nearest player",
+    Default = false,
+    Callback = function(Value)
+        killAuraEnabled = Value
+    end
+})
+
+-- Add Misc Tab Features
+local MiscSection = Tabs.Misc:AddSection("Misc")
+
+-- Full Bright
+MiscSection:AddButton({
+    Title = "Full Bright",
+    Description = "Makes everything brighter",
+    Callback = function()
+        local Lighting = game:GetService("Lighting")
+        Lighting.Brightness = 2
+        Lighting.ClockTime = 14
+        Lighting.FogEnd = 100000
+        Lighting.GlobalShadows = false
+        Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+    end
+})
+
+-- Plant Boxes
+MiscSection:AddButton({
+    Title = "Plant 5 Boxes",
+    Description = "Places 5 plant boxes in front of you",
+    Callback = function()
+        local Character = game.Players.LocalPlayer.Character
+        if Character and Character:FindFirstChild("HumanoidRootPart") then
+            for i = 1, 5 do
+                local position = Character.HumanoidRootPart.Position + Vector3.new(0, 0, i)
+                local cframe = CFrame.new(position)
+                game:GetService("ReplicatedStorage").Events.PlaceStructure:FireServer("Plant Box", cframe, 0)
+            end
+        end
+    end
+})
+
+-- Auto Plant
+local AutoFarmSection = Tabs.Autofarm:AddSection("Auto Plant")
+
+AutoFarmSection:AddToggle("AutoPlant", {
+    Title = "Auto Plant Fruit",
+    Description = "Automatically plants fruits in nearby boxes",
+    Default = false,
+    Callback = function(Value)
+        autoPlantEnabled = Value
+        if Value then
+            spawn(function()
+                while autoPlantEnabled do
+                    local Character = game.Players.LocalPlayer.Character
+                    if Character and Character:FindFirstChild("HumanoidRootPart") then
+                        local hrp = Character.HumanoidRootPart.Position
+                        for _, deployable in pairs(workspace:FindFirstChild("Important"):FindFirstChild("Deployables"):GetChildren()) do
+                            if deployable.Name == "Plant Box" then
+                                local part = deployable:FindFirstChildOfClass("Part")
+                                if part and (hrp - part.Position).Magnitude <= 10 then
+                                    game:GetService("ReplicatedStorage").Events.InteractStructure:FireServer(deployable, "Bloodfruit")
+                                end
+                            end
+                        end
+                    end
+                    wait(0.2)
+                end
+            end)
+        end
+    end
+})
+
+-- Kill Aura Function
+local function startKillAura()
+    spawn(function()
+        while killAuraEnabled do
+            local closestPlayer = getClosestPlayer()
+            if closestPlayer and closestPlayer.Character and closestPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local args = {
+                    [1] = {
+                        [1] = closestPlayer.Character,
+                        [2] = closestPlayer.Character,
+                        [3] = closestPlayer.Character,
+                        [4] = closestPlayer.Character,
+                        [5] = closestPlayer.Character,
+                        [6] = closestPlayer.Character,
+                        [7] = closestPlayer.Character
+                    }
+                }
+                game:GetService("ReplicatedStorage").Events.SwingTool:FireServer(unpack(args))
+            end
+            wait(0.01)
+        end
+    end)
+end
+
+-- Connect toggles to functions
+Toggles.KillAura:OnChanged(function()
+    if Toggles.KillAura.Value then
+        startKillAura()
+    end
+end)
+
+Toggles.BowAimbot:OnChanged(function()
+    if Toggles.BowAimbot.Value then
+        startBowAimbot()
+    end
+end)
+
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+InterfaceManager:SetFolder("SurvivalOdyssey")
+SaveManager:SetFolder("SurvivalOdyssey/configs")
+
+InterfaceManager:BuildInterfaceSection(Tabs.Misc)
+SaveManager:BuildConfigSection(Tabs.Misc)
+
+Window:SelectTab(1)
