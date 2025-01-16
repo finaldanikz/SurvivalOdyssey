@@ -651,26 +651,23 @@ local Players = game:GetService("Players")
 -- Variables
 local autoSwingEnabled = false
 local autoSwingConnection
-local lastSwingTime = 0
 
--- Function to perform swing with proper game values
+-- Function to perform swing
 local function performSwing()
-    local character = Players.LocalPlayer.Character
+    local character = game.Players.LocalPlayer.Character
     if not character then return end
     
     local rootPart = character:FindFirstChild("HumanoidRootPart")
     if not rootPart then return end
     
-    -- Construct arguments matching the game's format
     local args = {
         [1] = {
-            [1] = character
+            ["[-111.1606,1.0534,520.748,-0.6597,-0.02]"] = character
         },
-        [2] = tick(), -- Use tick() instead of server time
-        [3] = rootPart.Position + (rootPart.CFrame.LookVector * 5)
+        [2] = 1736995553.846505,
+        [3] = rootPart.Position
     }
     
-    -- Fire remote
     game:GetService("ReplicatedStorage").Events.SwingTool:FireServer(unpack(args))
 end
 
@@ -680,21 +677,15 @@ local function startAutoSwing()
         autoSwingConnection:Disconnect() 
     end
 
-    autoSwingConnection = RunService.Heartbeat:Connect(function()
+    autoSwingConnection = game:GetService("RunService").Heartbeat:Connect(function()
         if not autoSwingEnabled then return end
-        
-        local currentTime = tick()
-        if currentTime - lastSwingTime < 0.2 then return end
-        lastSwingTime = currentTime
-        
         performSwing()
+        task.wait(0.1) -- Basic delay between swings
     end)
 end
 
--- Rest of the code remains the same...
-
 -- Toggle with keybind
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
+game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.V and not gameProcessed then
         autoSwingEnabled = not autoSwingEnabled
         
@@ -708,7 +699,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         end
         
         -- Update status GUI
-        local statusLabel = Players.LocalPlayer.PlayerGui:FindFirstChild("AutoSwingStatus")
+        local statusLabel = game.Players.LocalPlayer.PlayerGui:FindFirstChild("AutoSwingStatus")
         if statusLabel and statusLabel:FindFirstChild("TextLabel") then
             statusLabel.TextLabel.Text = "Auto Swing: " .. (autoSwingEnabled and "ON" or "OFF")
         end
@@ -716,7 +707,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 -- Cleanup
-Players.LocalPlayer.CharacterRemoving:Connect(function()
+game.Players.LocalPlayer.CharacterRemoving:Connect(function()
     if autoSwingConnection then
         autoSwingConnection:Disconnect()
         autoSwingConnection = nil
