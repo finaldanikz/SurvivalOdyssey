@@ -13,7 +13,7 @@ end
 
 local Window = Fluent:CreateWindow({
     Title = "Survival Odyssey",
-    SubTitle = "by smh",
+    SubTitle = "by xcopium. (Original Owner smh)",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
     Acrylic = true,
