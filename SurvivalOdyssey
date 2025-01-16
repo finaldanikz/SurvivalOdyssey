@@ -636,23 +636,25 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
+-- Cache services
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
 -- Variables for auto swing
 local autoSwingEnabled = false
 local autoSwingConnection
 
--- Function to get center screen position
-local function getCenterPosition()
-    local viewportSize = workspace.CurrentCamera.ViewportSize
-    return Vector2.new(viewportSize.X/2, viewportSize.Y/2)
-end
-
--- Perform swing using center screen
-local function performSwing()
-    local virtualUser = game:GetService("VirtualUser")
-    local centerPos = getCenterPosition()
-    virtualUser:Button1Down(centerPos)
-    task.wait(0.1)
-    virtualUser:Button1Up(centerPos)
+-- Function to activate equipped tool
+local function swingTool()
+    local player = Players.LocalPlayer
+    local character = player.Character
+    if not character then return end
+    
+    local tool = character:FindFirstChildOfClass("Tool")
+    if tool and tool:FindFirstChild("Use") then
+        tool.Use:FireServer()
+    end
 end
 
 -- Auto swing function
@@ -663,7 +665,7 @@ local function startAutoSwing()
 
     autoSwingConnection = RunService.Heartbeat:Connect(function()
         if not autoSwingEnabled then return end
-        performSwing()
+        swingTool()
         task.wait(0.1) -- Small delay between swings
     end)
 end
