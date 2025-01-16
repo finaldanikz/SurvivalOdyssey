@@ -616,120 +616,77 @@ local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- Variables for auto swing
+-- Cache services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Variables
 local autoSwingEnabled = false
 local autoSwingConnection
 local lastSwingTime = 0
 
--- Function to generate random position offset
-local function getRandomOffset()
-    return Vector3.new(
-        math.random(-5, 5) * 0.1,
-        math.random(-2, 2) * 0.1,
-        math.random(-5, 5) * 0.1
-    )
-end
-
--- Function to generate a random tick-based timestamp
-local function getRandomTickStamp()
-    return tick() + math.random(100000, 999999) / 1000
-end
-
--- Function to create randomized swing arguments
-local function createSwingArgs()
+-- Simple swing function that mimics legitimate swing pattern
+local function performSwing()
     local player = Players.LocalPlayer
     local character = player.Character
-    
-    if not character then return nil end
-    
-    -- Get character position and add random offset
-    local position = character.PrimaryPart.Position + getRandomOffset()
-    
-    -- Create a random key using position and tick values
-    local posKey = string.format(
-        "[%.4f,%.4f,%.4f,%.4f,%.2f]",
-        position.X,
-        position.Y,
-        position.Z,
-        tick() % 1, -- Use tick's decimal part for more randomness
-        math.random() * 0.1
-    )
-    
-    -- Create args table with tick-based timing
-    return {
+    if not character then return end
+
+    -- Basic args structure that matches the game's expected format
+    local args = {
         [1] = {
-            [posKey] = character
-        },
-        [2] = getRandomTickStamp(),
-        [3] = position
+            [1] = character
+        }
     }
-end
 
--- Add status indicator
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Size = UDim2.new(0, 120, 0, 25)
-StatusLabel.Position = UDim2.new(0.5, -60, 0, 10)
-StatusLabel.BackgroundTransparency = 0.5
-StatusLabel.BackgroundColor3 = Color3.new(0, 0, 0)
-StatusLabel.TextColor3 = Color3.new(1, 1, 1)
-StatusLabel.Text = "Auto Swing: OFF"
-StatusLabel.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
-
--- Function to safely fire swing remote
-local function fireSwingRemote()
-    local args = createSwingArgs()
-    if not args then return end
-    
-    -- Add random delay between swings (50-150ms)
-    task.wait(math.random(50, 150) / 1000)
-    
-    -- Fire remote with protection
+    -- Protected remote call
     pcall(function()
         ReplicatedStorage.Events.SwingTool:FireServer(unpack(args))
     end)
 end
 
--- Setup input detection
+-- Toggle functionality
+local function startAutoSwing()
+    if autoSwingConnection then 
+        autoSwingConnection:Disconnect() 
+    end
+
+    autoSwingConnection = RunService.Heartbeat:Connect(function()
+        local currentTime = tick()
+        -- Add slight randomization to swing timing
+        if currentTime - lastSwingTime < 0.2 then return end
+        lastSwingTime = currentTime
+        
+        performSwing()
+        -- Small random delay between swings
+        task.wait(math.random(1, 5) / 100)
+    end)
+end
+
+-- Input handling
 local UserInputService = game:GetService("UserInputService")
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.V and not gameProcessed then
         autoSwingEnabled = not autoSwingEnabled
         
         if autoSwingEnabled then
-            StatusLabel.Text = "Auto Swing: ON"
-            
-            if autoSwingConnection then
-                autoSwingConnection:Disconnect()
-            end
-            
-            -- Start swing loop with randomized timing
-            autoSwingConnection = RunService.Heartbeat:Connect(function()
-                local currentTime = tick()
-                if currentTime - lastSwingTime < math.random(18, 22) / 100 then
-                    return
-                end
-                lastSwingTime = currentTime
-                
-                fireSwingRemote()
-            end)
+            startAutoSwing()
         else
             if autoSwingConnection then
                 autoSwingConnection:Disconnect()
                 autoSwingConnection = nil
             end
-            StatusLabel.Text = "Auto Swing: OFF"
         end
     end
 end)
 
--- Clean up connection when character is removed
+-- Cleanup
 Players.LocalPlayer.CharacterRemoving:Connect(function()
     if autoSwingConnection then
         autoSwingConnection:Disconnect()
         autoSwingConnection = nil
     end
     autoSwingEnabled = false
-    StatusLabel.Text = "Auto Swing: OFF"
 end)
 
 -- Water Walking Toggle
