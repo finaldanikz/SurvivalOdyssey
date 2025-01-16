@@ -611,84 +611,87 @@ game.Players.LocalPlayer.CharacterRemoving:Connect(function()
     end
 end)
 
--- Variables for swing system with improved randomization
+-- Cache frequently used services
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Variables for auto swing
 local autoSwingEnabled = false
 local autoSwingConnection
 local lastSwingTime = 0
-local baseDelay = 0.4  -- Base delay between swings
 
--- More natural randomization functions
+-- Function to generate random position offset
 local function getRandomOffset()
-    return math.random() * 0.2 - 0.1  -- Random offset between -0.1 and 0.1
-end
-
-local function getRandomAngle()
-    return CFrame.Angles(
-        math.rad(math.random(-5, 5)),
-        math.rad(math.random(-10, 10)),
-        math.rad(math.random(-5, 5))
+    return Vector3.new(
+        math.random(-5, 5) * 0.1,
+        math.random(-2, 2) * 0.1,
+        math.random(-5, 5) * 0.1
     )
 end
 
--- Function to get nearby resources with randomization
-local function getNearbyResource()
-    local char = game.Players.LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    
-    local hrp = char.HumanoidRootPart
-    local possibleResources = {}
-    
-    -- Collect all valid resources within range
-    for _, folder in pairs(workspace.Map.Resources:GetChildren()) do
-        for _, resource in pairs(folder:GetChildren()) do
-            if resource:FindFirstChild("Reference") then
-                local dist = (hrp.Position - resource.Reference.Position).Magnitude
-                if dist < 20 then
-                    table.insert(possibleResources, {resource = resource, distance = dist})
-                end
-            end
-        end
-    end
-    
-    -- Randomly select from closest resources to appear more natural
-    table.sort(possibleResources, function(a, b) return a.distance < b.distance end)
-    local closeResources = {}
-    for i = 1, math.min(3, #possibleResources) do
-        table.insert(closeResources, possibleResources[i].resource)
-    end
-    
-    return #closeResources > 0 and closeResources[math.random(1, #closeResources)] or nil
+-- Function to generate a random tick-based timestamp
+local function getRandomTickStamp()
+    return tick() + math.random(100000, 999999) / 1000
 end
 
--- Function to simulate natural mouse movement
-local function simulateMouseMovement()
-    local randomX = math.random(-50, 50)
-    local randomY = math.random(-30, 30)
-    game:GetService("VirtualInputManager"):SendMouseMoveEvent(randomX, randomY, game)
-end
-
--- Function to create swing arguments with variation
-local function createSwingArgs(resource, rootPart)
-    local basePosition = resource.Reference.Position
-    local randomOffset = Vector3.new(
-        getRandomOffset(),
-        getRandomOffset(),
-        getRandomOffset()
+-- Function to create randomized swing arguments
+local function createSwingArgs()
+    local player = Players.LocalPlayer
+    local character = player.Character
+    
+    if not character then return nil end
+    
+    -- Get character position and add random offset
+    local position = character.PrimaryPart.Position + getRandomOffset()
+    
+    -- Create a random key using position and tick values
+    local posKey = string.format(
+        "[%.4f,%.4f,%.4f,%.4f,%.2f]",
+        position.X,
+        position.Y,
+        position.Z,
+        tick() % 1, -- Use tick's decimal part for more randomness
+        math.random() * 0.1
     )
     
+    -- Create args table with tick-based timing
     return {
         [1] = {
-            [1] = resource,
-            [2] = rootPart,
-            [3] = basePosition + randomOffset,
-            [4] = getRandomAngle()
+            [posKey] = character
         },
-        [2] = tick() + getRandomOffset()
+        [2] = getRandomTickStamp(),
+        [3] = position
     }
 end
 
--- Setup improved input detection with human-like patterns
-game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+-- Add status indicator
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(0, 120, 0, 25)
+StatusLabel.Position = UDim2.new(0.5, -60, 0, 10)
+StatusLabel.BackgroundTransparency = 0.5
+StatusLabel.BackgroundColor3 = Color3.new(0, 0, 0)
+StatusLabel.TextColor3 = Color3.new(1, 1, 1)
+StatusLabel.Text = "Auto Swing: OFF"
+StatusLabel.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+
+-- Function to safely fire swing remote
+local function fireSwingRemote()
+    local args = createSwingArgs()
+    if not args then return end
+    
+    -- Add random delay between swings (50-150ms)
+    task.wait(math.random(50, 150) / 1000)
+    
+    -- Fire remote with protection
+    pcall(function()
+        ReplicatedStorage.Events.SwingTool:FireServer(unpack(args))
+    end)
+end
+
+-- Setup input detection
+local UserInputService = game:GetService("UserInputService")
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.V and not gameProcessed then
         autoSwingEnabled = not autoSwingEnabled
         
@@ -699,47 +702,15 @@ game:GetService("UserInputService").InputBegan:Connect(function(input, gameProce
                 autoSwingConnection:Disconnect()
             end
             
-            autoSwingConnection = game:GetService("RunService").Heartbeat:Connect(function()
-                local char = game.Players.LocalPlayer.Character
-                if not char then return end
-                
+            -- Start swing loop with randomized timing
+            autoSwingConnection = RunService.Heartbeat:Connect(function()
                 local currentTime = tick()
-                local swingDelay = baseDelay + getRandomOffset()
-                
-                if currentTime - lastSwingTime < swingDelay then 
-                    return 
-                end
-                
-                -- Random chance to add extra delay
-                if math.random() < 0.1 then
-                    task.wait(math.random() * 0.3)
-                end
-                
-                -- Get random resource from nearby options
-                local nearestResource = getNearbyResource()
-                if not nearestResource then return end
-                
-                -- Simulate mouse movement
-                simulateMouseMovement()
-                
-                -- Random chance to miss swing
-                if math.random() < 0.05 then
-                    task.wait(math.random() * 0.2)
+                if currentTime - lastSwingTime < math.random(18, 22) / 100 then
                     return
                 end
+                lastSwingTime = currentTime
                 
-                -- Create varied swing arguments
-                local swingArgs = createSwingArgs(nearestResource, char.HumanoidRootPart)
-                
-                -- Add random delay before swing
-                task.wait(math.random() * 0.1)
-                
-                -- Fire swing event with pcall for safety
-                pcall(function()
-                    game:GetService("ReplicatedStorage").Events.SwingTool:FireServer(table.unpack(swingArgs))
-                end)
-                
-                lastSwingTime = tick()
+                fireSwingRemote()
             end)
         else
             if autoSwingConnection then
@@ -751,27 +722,8 @@ game:GetService("UserInputService").InputBegan:Connect(function(input, gameProce
     end
 end)
 
--- Clean up on character removal
-game.Players.LocalPlayer.CharacterRemoving:Connect(function()
-    if autoSwingConnection then
-        autoSwingConnection:Disconnect()
-        autoSwingConnection = nil
-    end
-    autoSwingEnabled = false
-    StatusLabel.Text = "Auto Swing: OFF"
-end)
 -- Clean up connection when character is removed
-game.Players.LocalPlayer.CharacterRemoving:Connect(function()
-    if autoSwingConnection then
-        autoSwingConnection:Disconnect()
-        autoSwingConnection = nil
-    end
-    autoSwingEnabled = false
-    StatusLabel.Text = "Auto Swing: OFF"
-end)
-
--- Clean up connection when character is removed
-game.Players.LocalPlayer.CharacterRemoving:Connect(function()
+Players.LocalPlayer.CharacterRemoving:Connect(function()
     if autoSwingConnection then
         autoSwingConnection:Disconnect()
         autoSwingConnection = nil
