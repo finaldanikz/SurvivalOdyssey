@@ -653,11 +653,6 @@ local autoSwingEnabled = false
 local autoSwingConnection
 local lastSwingTime = 0
 
--- Function to get current server time
-local function getServerTime()
-    return game:GetService("ReplicatedStorage").TimeEvent:InvokeServer()
-end
-
 -- Function to perform swing with proper game values
 local function performSwing()
     local character = Players.LocalPlayer.Character
@@ -666,29 +661,20 @@ local function performSwing()
     local rootPart = character:FindFirstChild("HumanoidRootPart")
     if not rootPart then return end
     
-    -- Get all parts in front of the character that could be hit
-    local hitboxKey = string.format("[%.4f,%.4f,%.4f,%.4f,%.4f]",
-        rootPart.Position.X,
-        rootPart.Position.Y,
-        rootPart.Position.Z,
-        rootPart.CFrame.LookVector.X,
-        rootPart.CFrame.LookVector.Y
-    )
-    
-    -- Construct proper arguments matching the game's format
+    -- Construct arguments matching the game's format
     local args = {
         [1] = {
-            [hitboxKey] = character
+            [1] = character
         },
-        [2] = getServerTime(),
+        [2] = tick(), -- Use tick() instead of server time
         [3] = rootPart.Position + (rootPart.CFrame.LookVector * 5)
     }
     
-    -- Fire remote with corrected args
+    -- Fire remote
     game:GetService("ReplicatedStorage").Events.SwingTool:FireServer(unpack(args))
 end
 
--- Auto swing function with randomization and proper timing
+-- Auto swing function
 local function startAutoSwing()
     if autoSwingConnection then 
         autoSwingConnection:Disconnect() 
@@ -698,13 +684,10 @@ local function startAutoSwing()
         if not autoSwingEnabled then return end
         
         local currentTime = tick()
-        -- Add randomization to timing to avoid detection
-        if currentTime - lastSwingTime < 0.2 + (math.random() * 0.15) then return end
+        if currentTime - lastSwingTime < 0.2 then return end
         lastSwingTime = currentTime
         
         performSwing()
-        -- Random delay between swings
-        task.wait(math.random(8, 12) / 100)
     end)
 end
 
