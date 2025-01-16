@@ -875,14 +875,13 @@ local farmingCoroutine = nil
 AutofarmSection:AddDropdown("ResourceType", {
     Title = "Resource Type",
     Description = "Select resource to farm",
-    Values = {"Jungle Tree", "Bush"},
+    Values = {"Jungle Tree", "Bush", "Gold Node"},
     Default = "Jungle Tree",
     Multi = false,
     Callback = function(Value)
         selectedResource = Value
     end
 })
-
 -- Function to start resource farming
 local function startResourceFarm()
     if farmingCoroutine then
@@ -979,6 +978,87 @@ local function startResourceFarm()
                                 task.wait(4) -- Wait before moving to next bush
                             end
                         end
+                    end
+                end
+            end)
+            
+            if not success then
+                print("Farming error:", err)
+            end
+            
+            task.wait(1)
+        end
+    end)
+    
+    coroutine.resume(farmingCoroutine)
+end
+
+-- Function to start resource farming GOLD NODE
+local function startResourceFarm()
+    if farmingCoroutine then
+        coroutine.close(farmingCoroutine)
+        farmingCoroutine = nil
+    end
+
+    farmingCoroutine = coroutine.create(function()
+        while resourceFarmEnabled do
+            local success, err = pcall(function()
+                local resourceFolder = workspace.Map.Resources
+                
+                if selectedResource == "Gold Node" then
+                    -- Gold Node farming
+                    local goldNodes = resourceFolder:FindFirstChild("Gold Node")
+                    if goldNodes then
+                        for _, node in pairs(goldNodes:GetChildren()) do
+                            if not resourceFarmEnabled then return end
+                            
+                            if node:FindFirstChild("Reference") and node:FindFirstChild("Health") and node.Health.Value > 0 then
+                                -- Teleport to gold node
+                                game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = node.Reference.CFrame * CFrame.new(0, 3, 0)
+                                
+                                -- Farm until node is depleted or timeout
+                                local startTime = tick()
+                                local lastHealth = node.Health.Value
+                                local lastHealthCheck = tick()
+                                
+                                while resourceFarmEnabled and node:FindFirstChild("Health") and node.Health.Value > 0 do
+                                    -- Check if health hasn't changed in 10 seconds
+                                    if tick() - lastHealthCheck > 10 and node.Health.Value == lastHealth then
+                                        print("Gold node health hasn't changed, moving to next")
+                                        break
+                                    end
+                                    
+                                    -- Update health check
+                                    if node.Health.Value ~= lastHealth then
+                                        lastHealth = node.Health.Value
+                                        lastHealthCheck = tick()
+                                    end
+                                    
+                                    -- Overall timeout after 30 seconds
+                                    if tick() - startTime > 30 then
+                                        print("Gold node timeout, moving to next")
+                                        break
+                                    end
+                                    
+                                    task.wait(Options.SwingSpeed.Value)
+                                end
+                                
+                                task.wait(4) -- Wait before moving to next node
+                            end
+                        end
+                    end
+                elseif selectedResource == "Jungle Tree" then
+                    -- Existing Jungle Tree code...
+                    for _, resource in pairs(resourceFolder:GetChildren()) do
+                        if resource.Name == "Jungle Tree" then
+                            -- Rest of existing jungle tree code...
+                        end
+                    end
+                else
+                    -- Existing Bush code...
+                    local bushes = resourceFolder:FindFirstChild("Bush")
+                    if bushes then
+                        -- Rest of existing bush code...
                     end
                 end
             end)
