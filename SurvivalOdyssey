@@ -631,20 +631,31 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
--- Variables
+-- Cache services
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+-- Variables for auto swing
 local autoSwingEnabled = false
 local autoSwingConnection
-local lastSwingTime = 0
 
--- Simulated clicking function
-local function simulateClick()
-    local virtualUser = game:GetService("VirtualUser")
-    virtualUser:Button1Down(Vector2.new(0, 0))
-    task.wait(0.1) -- Brief delay
-    virtualUser:Button1Up(Vector2.new(0, 0))
+-- Function to get center screen position
+local function getCenterPosition()
+    local viewportSize = workspace.CurrentCamera.ViewportSize
+    return Vector2.new(viewportSize.X/2, viewportSize.Y/2)
 end
 
--- Auto swing function with natural timing variations
+-- Perform swing using center screen
+local function performSwing()
+    local virtualUser = game:GetService("VirtualUser")
+    local centerPos = getCenterPosition()
+    virtualUser:Button1Down(centerPos)
+    task.wait(0.1)
+    virtualUser:Button1Up(centerPos)
+end
+
+-- Auto swing function
 local function startAutoSwing()
     if autoSwingConnection then 
         autoSwingConnection:Disconnect() 
@@ -652,16 +663,8 @@ local function startAutoSwing()
 
     autoSwingConnection = RunService.Heartbeat:Connect(function()
         if not autoSwingEnabled then return end
-        
-        local currentTime = tick()
-        -- Add human-like timing variation
-        if currentTime - lastSwingTime < 0.3 + (math.random() * 0.2) then return end
-        lastSwingTime = currentTime
-        
-        simulateClick()
-        
-        -- Random delay between swings for more natural pattern
-        task.wait(math.random(2, 5) / 10)
+        performSwing()
+        task.wait(0.1) -- Small delay between swings
     end)
 end
 
@@ -680,7 +683,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         end
         
         -- Update status GUI
-        local statusLabel = game.Players.LocalPlayer.PlayerGui:FindFirstChild("AutoSwingStatus")
+        local statusLabel = Players.LocalPlayer.PlayerGui:FindFirstChild("AutoSwingStatus")
         if statusLabel and statusLabel:FindFirstChild("TextLabel") then
             statusLabel.TextLabel.Text = "Auto Swing: " .. (autoSwingEnabled and "ON" or "OFF")
         end
@@ -695,7 +698,6 @@ Players.LocalPlayer.CharacterRemoving:Connect(function()
     end
     autoSwingEnabled = false
 end)
-
 
 -- Water Walking Toggle
 local waterPart = nil
