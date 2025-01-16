@@ -626,139 +626,48 @@ local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+-- Cache services
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
 -- Variables
 local autoSwingEnabled = false
 local autoSwingConnection
 local lastSwingTime = 0
-local lastMouseMove = tick()
-local humanSwingDelay = 0.2 -- Base delay between swings
-local totalSwings = 0
-local restPeriodStart = 0
-local isResting = false
 
--- Simulate human-like mouse movement patterns
-local function simulateMouseMovement()
-    -- Random small mouse movements
-    local mouseDelta = Vector2.new(
-        math.random(-5, 5),
-        math.random(-3, 3)
-    )
-    
-    -- Attempt to simulate mouse movement event
-    game:GetService("VirtualUser"):Button1Down(mouseDelta)
-    task.wait(math.random(50, 150) / 1000) -- Random delay 50-150ms
-    game:GetService("VirtualUser"):Button1Up(mouseDelta)
+-- Simulated clicking function
+local function simulateClick()
+    local virtualUser = game:GetService("VirtualUser")
+    virtualUser:Button1Down(Vector2.new(0, 0))
+    task.wait(0.1) -- Brief delay
+    virtualUser:Button1Up(Vector2.new(0, 0))
 end
 
--- Function to get a randomized delay that appears more human-like
-local function getHumanlikeDelay()
-    -- Base delay with slight randomization
-    local delay = humanSwingDelay + (math.random(-20, 20) / 100)
-    
-    -- Occasionally add a longer delay to simulate human behavior
-    if math.random(1, 100) <= 5 then -- 5% chance
-        delay = delay + math.random(30, 50) / 100
-    end
-    
-    return delay
-end
-
--- Function to check if we should take a rest
-local function shouldTakeRest()
-    -- Take a rest after every 15-25 swings
-    if totalSwings >= math.random(15, 25) then
-        return true
-    end
-    return false
-end
-
--- More natural swing function with varying patterns
-local function performSwing()
-    local player = Players.LocalPlayer
-    local character = player.Character
-    if not character then return end
-    
-    -- Random chance to move mouse before swinging
-    if math.random(1, 100) <= 30 then -- 30% chance
-        simulateMouseMovement()
-    end
-    
-    -- Randomize the number of hits in each swing (1-3)
-    local hitCount = math.random(1, 3)
-    local args = {
-        [1] = {
-            [1] = character
-        }
-    }
-    
-    -- Add random number of targets to simulate more natural swinging
-    for i = 2, hitCount do
-        args[1][i] = character
-    end
-    
-    -- Protected remote call with error handling
-    pcall(function()
-        ReplicatedStorage.Events.SwingTool:FireServer(unpack(args))
-    end)
-    
-    totalSwings = totalSwings + 1
-end
-
--- Toggle functionality with improved patterns
+-- Auto swing function with natural timing variations
 local function startAutoSwing()
     if autoSwingConnection then 
         autoSwingConnection:Disconnect() 
     end
 
-    totalSwings = 0
-    isResting = false
-    
     autoSwingConnection = RunService.Heartbeat:Connect(function()
         if not autoSwingEnabled then return end
         
         local currentTime = tick()
+        -- Add human-like timing variation
+        if currentTime - lastSwingTime < 0.3 + (math.random() * 0.2) then return end
+        lastSwingTime = currentTime
         
-        -- Handle resting periods
-        if isResting then
-            if currentTime - restPeriodStart >= math.random(2, 4) then
-                isResting = false
-                totalSwings = 0
-                lastSwingTime = currentTime
-            end
-            return
-        end
+        simulateClick()
         
-        -- Check if we should start resting
-        if shouldTakeRest() then
-            isResting = true
-            restPeriodStart = currentTime
-            return
-        end
-        
-        -- Get dynamic delay for next swing
-        local swingDelay = getHumanlikeDelay()
-        
-        if currentTime - lastSwingTime >= swingDelay then
-            performSwing()
-            lastSwingTime = currentTime
-            
-            -- Add small random delay between swings
-            task.wait(math.random(10, 30) / 100)
-        end
+        -- Random delay between swings for more natural pattern
+        task.wait(math.random(2, 5) / 10)
     end)
 end
 
--- Input handling with improved key detection
-local UserInputService = game:GetService("UserInputService")
-local lastToggleTime = 0
-
+-- Toggle with keybind
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.V and not gameProcessed then
-        -- Prevent rapid toggling
-        local currentTime = tick()
-        if currentTime - lastToggleTime < 0.5 then return end
-        lastToggleTime = currentTime
-        
         autoSwingEnabled = not autoSwingEnabled
         
         if autoSwingEnabled then
@@ -769,21 +678,25 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 autoSwingConnection = nil
             end
         end
+        
+        -- Update status GUI
+        local statusLabel = game.Players.LocalPlayer.PlayerGui:FindFirstChild("AutoSwingStatus")
+        if statusLabel and statusLabel:FindFirstChild("TextLabel") then
+            statusLabel.TextLabel.Text = "Auto Swing: " .. (autoSwingEnabled and "ON" or "OFF")
+        end
     end
 end)
 
--- Cleanup with improved error handling
+-- Cleanup
 Players.LocalPlayer.CharacterRemoving:Connect(function()
-    pcall(function()
-        if autoSwingConnection then
-            autoSwingConnection:Disconnect()
-            autoSwingConnection = nil
-        end
-        autoSwingEnabled = false
-        totalSwings = 0
-        isResting = false
-    end)
+    if autoSwingConnection then
+        autoSwingConnection:Disconnect()
+        autoSwingConnection = nil
+    end
+    autoSwingEnabled = false
 end)
+
+
 -- Water Walking Toggle
 local waterPart = nil
 local waterWalkConnection = nil
