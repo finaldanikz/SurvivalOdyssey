@@ -641,20 +641,52 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
--- Variables for auto swing
+-- Cache services
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+-- Variables
 local autoSwingEnabled = false
 local autoSwingConnection
+local lastSwingTime = 0
 
--- Function to activate equipped tool
-local function swingTool()
-    local player = Players.LocalPlayer
-    local character = player.Character
+-- Function to get target position from character's looking direction
+local function getTargetPosition()
+    local character = Players.LocalPlayer.Character
     if not character then return end
     
-    local tool = character:FindFirstChildOfClass("Tool")
-    if tool and tool:FindFirstChild("Use") then
-        tool.Use:FireServer()
-    end
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+    
+    local lookVector = rootPart.CFrame.LookVector
+    return rootPart.Position + (lookVector * 5) -- 5 studs in front of character
+end
+
+-- Function to perform swing with proper game values
+local function performSwing()
+    local character = Players.LocalPlayer.Character
+    if not character then return end
+    
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+    
+    local targetPos = getTargetPosition()
+    if not targetPos then return end
+
+    -- Construct args with proper game values
+    local args = {
+        [1] = {
+            [1] = character,
+            ["mousePosition"] = targetPos,
+            ["rootPartPosition"] = rootPart.Position,
+            ["swingDirection"] = rootPart.CFrame.LookVector,
+            ["toolName"] = character:FindFirstChildOfClass("Tool") and character:FindFirstChildOfClass("Tool").Name or ""
+        }
+    }
+    
+    -- Fire remote with proper args
+    game:GetService("ReplicatedStorage").Events.SwingTool:FireServer(unpack(args))
 end
 
 -- Auto swing function
@@ -665,8 +697,15 @@ local function startAutoSwing()
 
     autoSwingConnection = RunService.Heartbeat:Connect(function()
         if not autoSwingEnabled then return end
-        swingTool()
-        task.wait(0.1) -- Small delay between swings
+        
+        local currentTime = tick()
+        -- Add slight randomization to timing
+        if currentTime - lastSwingTime < 0.2 + (math.random() * 0.1) then return end
+        lastSwingTime = currentTime
+        
+        performSwing()
+        -- Small random delay between swings
+        task.wait(math.random(1, 3) / 10)
     end)
 end
 
