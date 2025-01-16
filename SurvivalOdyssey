@@ -652,6 +652,21 @@ local Players = game:GetService("Players")
 local autoSwingEnabled = false
 local autoSwingConnection
 
+-- Function to get parts the tool might be touching
+local function getHitboxTouchingParts()
+    local character = game.Players.LocalPlayer.Character
+    if not character then return {} end
+    
+    local tool = character:FindFirstChildOfClass("Tool")
+    if not tool then return {} end
+    
+    local hitbox = tool:FindFirstChild("Hitbox")
+    if not hitbox then return {} end
+    
+    local touchingParts = hitbox:GetTouchingParts()
+    return touchingParts
+end
+
 -- Function to perform swing
 local function performSwing()
     local character = game.Players.LocalPlayer.Character
@@ -660,12 +675,14 @@ local function performSwing()
     local rootPart = character:FindFirstChild("HumanoidRootPart")
     if not rootPart then return end
     
+    -- Get touching parts for hitbox detection
+    local touchingParts = getHitboxTouchingParts()
+    
+    -- Construct proper arguments
     local args = {
-        [1] = {
-            ["[-111.1606,1.0534,520.748,-0.6597,-0.02]"] = character
-        },
-        [2] = 1736995553.846505,
-        [3] = rootPart.Position
+        [1] = touchingParts,  -- Hitbox touching parts
+        [2] = tick(),         -- Current time as target time
+        [3] = rootPart.CFrame -- Full CFrame instead of just position
     }
     
     game:GetService("ReplicatedStorage").Events.SwingTool:FireServer(unpack(args))
@@ -714,7 +731,6 @@ game.Players.LocalPlayer.CharacterRemoving:Connect(function()
     end
     autoSwingEnabled = false
 end)
-
 -- Water Walking Toggle
 local waterPart = nil
 local waterWalkConnection = nil
