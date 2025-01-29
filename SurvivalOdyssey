@@ -646,60 +646,57 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
--- Previous code remains the same until auto swing section
 
 -- Variables
 local autoSwingEnabled = false
 local autoSwingConnection
+local lastSwingTime = 0
 
--- Function to get parts the tool might be touching
-local function getHitboxTouchingParts()
-    local character = game.Players.LocalPlayer.Character
-    if not character then return {} end
-    
-    local tool = character:FindFirstChildOfClass("Tool")
-    if not tool then return {} end
-    
-    local hitbox = tool:FindFirstChild("Hitbox")
-    if not hitbox then return {} end
-    
-    local touchingParts = hitbox:GetTouchingParts()
-    return touchingParts
+-- Fetch server-validated player position via RemoteFunction
+local function getServerPosition()
+    local success, serverCFrame = pcall(function()
+        return game:GetService("ReplicatedStorage").Events.GetPlayerCFrame:InvokeServer()
+    end)
+    return success and serverCFrame or nil
 end
 
--- Function to perform swing
+-- Function to perform swing with server-synced data
 local function performSwing()
     local character = game.Players.LocalPlayer.Character
     if not character then return end
-    
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return end
-    
-    -- Get touching parts for hitbox detection
-    local touchingParts = getHitboxTouchingParts()
-    
-    -- Construct proper arguments
+
+    -- Fetch server-validated CFrame to avoid discrepancies
+    local serverCFrame = getServerPosition()
+    if not serverCFrame then return end
+
+    -- Mimic natural swing delay (human reaction time: 150-300ms)
+    if tick() - lastSwingTime < 0.25 then return end
+    lastSwingTime = tick()
+
+    -- Fire remote with server-approved data
     local args = {
-        [1] = touchingParts,  -- Hitbox touching parts
-        [2] = tick(),         -- Current time as target time
-        [3] = rootPart.CFrame -- Full CFrame instead of just position
+        [1] = {}, -- Empty hitbox parts (let server validate targets)
+        [2] = tick(),
+        [3] = serverCFrame
     }
-    
     game:GetService("ReplicatedStorage").Events.SwingTool:FireServer(unpack(args))
 end
 
--- Auto swing function
+-- Auto swing with human-like throttling
 local function startAutoSwing()
-    if autoSwingConnection then 
-        autoSwingConnection:Disconnect() 
-    end
+    if autoSwingConnection then autoSwingConnection:Disconnect() end
 
     autoSwingConnection = game:GetService("RunService").Heartbeat:Connect(function()
         if not autoSwingEnabled then return end
-        performSwing()
-        task.wait(0.1) -- Basic delay between swings
+        
+        -- Throttle swings to 3-4 per second (human max)
+        if math.random(1, 100) <= 85 then -- 15% chance to skip a tick
+            performSwing()
+            task.wait(math.random(25, 40) / 100) -- 0.25-0.4s delay
+        end
     end)
 end
+
 
 -- Toggle with keybind
 game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
@@ -722,6 +719,7 @@ game:GetService("UserInputService").InputBegan:Connect(function(input, gameProce
         end
     end
 end)
+
 
 -- Cleanup
 game.Players.LocalPlayer.CharacterRemoving:Connect(function()
